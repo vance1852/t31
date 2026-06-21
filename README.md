@@ -1,0 +1,342 @@
+# 微流控纳米颗粒扩散分析服务 (Nano Dispersion Analyzer)
+
+## 项目概述
+微流控芯片中纳米颗粒扩散实验的纯后端本地分析服务。
+纯离线、纯Python/FastAPI后端 + CLI入口 + Docker一键启动。
+自动生成样例实验数据。
+
+## 核心功能
+- 实验批次导入（本地目录）
+- 轨迹质控：排序、缺帧检测、短轨迹识别、断裂修复、跳点标记、跨通道检测、强度骤降
+- 漂移估计与扣除（鲁棒拟合，避开跳点）
+- 均方位移(MSD)计算，支持非均匀时间间隔
+- 扩散系数D拟合、异常扩散指数alpha、置信区间
+- 模型判别：布朗/受限/主动/异常扩散（AIC/BIC+规则）
+- Stokes-Einstein 水力学半径计算
+- 粒径标准品校准曲线
+- 批次统计汇总 (D分布、半径分布、通道差异)
+- 报告导出：JSON/CSV/Markdown 三种格式
+- 完整REST API (FastAPI, 端口6817)
+- 完整命令行接口 (click + rich)
+
+## 系统要求
+- Python >= 3.10
+- Docker (推荐)
+- 不能连外网也能运行（所有依赖随Docker镜像打包）
+
+## 快速启动 (Docker，推荐)
+
+### 一键启动 + 自动生成样例数据
+```bash
+docker-compose up -d --build
+```
+
+启动后：
+- API监听：http://localhost:6817
+- Swagger UI：http://localhost:6817/docs
+- 样例数据自动生成在 `./data/batches/`
+- 结果保存在 `./results/`
+- SQLite数据库：`./data/nano_dispersion.db`
+
+### 关闭服务
+```bash
+docker-compose down
+```
+
+## 本地安装 (无Docker)
+
+### 离线准备（在有网机器）
+```bash
+# 下载所有依赖到本地目录
+mkdir -p offline_packages
+pip download -r <(pip-compile pyproject.toml) -d offline_packages
+# 拷贝项目 + offline_packages 到离线机器
+```
+
+### 离线安装
+```bash
+# 在离线机器
+cd nano-dispersion
+pip install --no-index --find-links ./offline_packages -e ".[dev]"
+```
+
+### 启动服务
+```bash
+# 先生成样例数据
+nano-dispersion init-samples --num-batches 4
+
+# 启动API服务器
+nano-dispersion serve --host 127.0.0.1 --port 6817
+```
+
+## 命令行 (CLI) 使用示例
+
+### 1. 初始化样例数据
+```bash
+nano-dispersion init-samples --num-batches 4 --seed 42
+```
+
+### 2. 导入本地批次
+```bash
+nano-dispersion import-batch ./data/batches/batch_20260621_000 \
+  --description "100nm标准品，25°C，对照组"
+```
+
+### 3. 查看批次列表
+```bash
+nano-dispersion list-batches --limit 10
+```
+
+### 4. 启动分析任务
+```bash
+nano-dispersion analyze 1 --wait  # 1是批次ID，--wait显示进度条
+```
+
+### 5. 查看质控摘要
+```bash
+nano-dispersion qc-summary 1
+```
+
+### 6. 查看批次统计
+```bash
+nano-dispersion batch-summary 1
+```
+
+### 7. 查看轨迹结果 (最差的10条)
+```bash
+nano-dispersion list-trajectories 1 --worst --limit 10
+```
+
+### 8. 解释某条轨迹为什么被降权
+```bash
+nano-dispersion explain-trajectory 42 --verbose
+```
+
+### 9. 查看校准曲线
+```bash
+nano-dispersion calibration 1
+```
+
+### 10. 列出异常
+```bash
+nano-dispersion list-anomalies 1 --severity blocking
+```
+
+### 11. 导出报告
+```bash
+nano-dispersion export 1 --output-dir ./results --formats json,csv,markdown
+```
+
+## API 使用示例 (curl)
+
+### 健康检查
+```bash
+curl http://localhost:6817/api/v1/health
+# {"status":"ok","version":"0.1.0"}
+```
+
+### 导入批次
+```bash
+curl -X POST http://localhost:6817/api/v1/batches/import \
+  -H "Content-Type: application/json" \
+  -d '{"directory_path": "./data/batches/batch_20260621_000", "description": "100nm对照"}'
+```
+
+### 列出批次
+```bash
+curl http://localhost:6817/api/v1/batches/?limit=10
+```
+
+### 触发分析
+```bash
+curl -X POST http://localhost:6817/api/v1/batches/1/analyze
+# 返回 task_id
+```
+
+### 轮询任务状态
+```bash
+curl http://localhost:6817/api/v1/tasks/1
+# {"task_id":1,"status":"running","progress_pct":45,"message":"漂移估计中..."}
+```
+
+### 查看质控摘要
+```bash
+curl http://localhost:6817/api/v1/batches/1/qc
+```
+
+### 批次汇总
+```bash
+curl http://localhost:6817/api/v1/batches/1/summary
+```
+
+### 轨迹级结果
+```bash
+curl "http://localhost:6817/api/v1/batches/1/trajectories?only_valid=true&limit=50"
+```
+
+### 校准结果
+```bash
+curl http://localhost:6817/api/v1/batches/1/calibration
+```
+
+### 异常清单
+```bash
+curl "http://localhost:6817/api/v1/batches/1/anomalies?severity=blocking"
+```
+
+### 单条轨迹解释
+```bash
+curl http://localhost:6817/api/v1/trajectories/42/explain
+```
+
+### 导出报告
+```bash
+curl -X POST http://localhost:6817/api/v1/batches/1/export \
+  -H "Content-Type: application/json" \
+  -d '{"export_dir": "./results"}'
+```
+
+### 生成样例数据
+```bash
+curl -X POST http://localhost:6817/api/v1/samples/generate \
+  -H "Content-Type: application/json" \
+  -d '{"num_batches": 4}'
+```
+
+## 数据格式规范
+
+### 输入数据结构
+```
+batch_YYYYMMDD_NNN/
+├── metadata.json
+└── trajectories/
+    ├── channel_A_001.csv
+    ├── channel_A_002.csv
+    └── ...
+```
+
+### metadata.json 必填字段
+```json
+{
+  "batch_id": "batch_20260621_000",
+  "description": "100nm标准品，25°C",
+  "pixel_size_um": 0.107,
+  "frame_rate_hz": 30,
+  "temperature_c": 25.0,
+  "viscosity_pa_s": 0.00089,
+  "nominal_diameter_nm": 100,
+  "channel_width_um": 200,
+  "channel_height_um": 50,
+  "channels": ["channel_A", "channel_B"],
+  "notes": "备注",
+  "operator": "张三",
+  "timestamp": "2026-06-21T09:00:00"
+}
+```
+
+### 轨迹CSV列
+| 列 | 类型 | 说明 |
+|---|---|---|
+| frame | int | 帧号 |
+| time_s | float | 真实时间(秒) |
+| particle_id | int | 颗粒编号 |
+| x_um | float | X坐标(微米) |
+| y_um | float | Y坐标(微米) |
+| intensity | float | 荧光强度 |
+| channel_id | str | 通道编号 |
+
+## 报告输出
+
+导出后生成：
+- `batch_{id}_report.json` - 完整结构化数据
+- `batch_{id}_trajectories.csv` - 轨迹结果表
+- `batch_{id}_anomalies.csv` - 异常清单
+- `batch_{id}_calibration.csv` - 校准点
+- `batch_{id}_msd_summary.csv` - 集成MSD
+- `batch_{id}_report.md` - 人类可读Markdown报告
+
+Markdown报告章节：
+1. 实验参数表
+2. 质控摘要
+3. 模型判别统计
+4. 批次统计 (D分布、半径、通道差异)
+5. 校准曲线数据表
+6. 最差轨迹 Top-10
+7. 复测建议
+8. 备注说明
+
+## 运行测试
+
+```bash
+cd nano-dispersion
+python -m pytest nano_dispersion/tests/ -v
+```
+
+29个测试覆盖：
+- 轨迹断裂修复不误连远距离颗粒
+- 已知漂移扣除后残余接近零
+- 非均匀时间间隔下MSD用真实时间差
+- 布朗扩散拟合D接近真实值
+- 受限扩散能识别
+- 短轨迹只进质控不进D分布
+- 跨通道触发阻塞级异常
+- 报告导出文件齐全
+
+## 项目目录结构
+```
+nano_dispersion/
+├── algorithms/          # 核心算法 (QC, 漂移, MSD, 拟合, SE)
+├── api/                 # FastAPI 接口 (main.py, routes.py)
+├── cli/                 # click 命令行 (main.py)
+├── data_generator/      # 样例数据生成器
+├── models/              # SQLAlchemy ORM + Pydantic schemas
+├── reports/             # JSON/CSV/Markdown 报告导出
+├── services/            # 业务逻辑 (BatchService, TaskManager)
+├── tests/               # pytest 测试
+└── config.py            # 全局配置
+data/
+├── batches/             # 实验批次数据
+└── nano_dispersion.db   # SQLite 数据库
+results/                 # 导出的报告
+```
+
+## 关键物理公式
+
+### Stokes-Einstein 方程
+```
+D = k_B * T / (6 * π * η * R_h)
+R_h = k_B * T / (6 * π * η * D)
+```
+- k_B = 1.380649×10⁻²³ J/K (玻尔兹曼常数)
+- T: 绝对温度 (K)
+- η: 黏度 (Pa·s)
+- R_h: 水力学半径 (m)
+
+### 二维布朗扩散 MSD
+```
+MSD(t) = 4 * D * t
+```
+
+### 异常扩散 MSD
+```
+MSD(t) = 4 * D * t^α
+α ≈ 1: 布朗扩散
+α < 1: 亚扩散 (受限)
+α > 1: 超扩散 (主动运输/残留漂移)
+```
+
+## 注意事项
+- 所有算法**只标记异常，不静默删除数据**
+- 短轨迹(<20帧)：计算结果存在，但**不参与最终D分布统计**，只在质控报告中出现
+- 漂移扣除前后结果都保留
+- 跨通道轨迹标记为**阻塞级(blocking)异常**
+- 同一通道内 `particle_id` 重复要小心，导入时按 `(channel_id, particle_id)` 组合键识别
+
+## 技术栈
+- **Web框架**: FastAPI + Uvicorn
+- **数据库**: SQLite + SQLAlchemy 2.0
+- **数据模型**: Pydantic v2
+- **科学计算**: NumPy, Pandas, SciPy, scikit-learn
+- **CLI**: Click + Rich
+- **容器**: Docker + docker-compose
+- **测试**: pytest (29个测试)

@@ -1,0 +1,19 @@
+{
+  "batch_id": "batch_20260621_000",
+  "description": "Control batch - 100nm diameter, 25°C, water",
+  "pixel_size_um": 0.107,
+  "frame_rate_hz": 30.0,
+  "temperature_c": 25.0,
+  "viscosity_pa_s": 0.00089,
+  "nominal_diameter_nm": 100,
+  "channel_width_um": 200.0,
+  "channel_height_um": 50.0,
+  "channels": [
+    "channel_A",
+    "channel_B",
+    "channel_C"
+  ],
+  "notes": "Control batch: 100nm polystyrene beads in water at 25°C",
+  "operator": "synthetic_generator",
+  "timestamp": "2026-06-21T11:38:36.052757"
+}

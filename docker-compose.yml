@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  nano-dispersion:
+    build: .
+    container_name: nano-dispersion
+    ports:
+      - "6817:6817"
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+    environment:
+      - NANO_DISPERSION_GENERATE_SAMPLES=true
+      - NANO_DISPERSION_PORT=6817
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:6817/api/v1/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s

@@ -1,0 +1,2 @@
+[console_scripts]
+nano-dispersion = nano_dispersion.cli.main:cli

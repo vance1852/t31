@@ -1,0 +1,19 @@
+{
+  "batch_id": "batch_20260621_001",
+  "description": "High viscosity batch - 50nm diameter, 37°C, 30% glycerol",
+  "pixel_size_um": 0.107,
+  "frame_rate_hz": 30.0,
+  "temperature_c": 37.0,
+  "viscosity_pa_s": 0.0018,
+  "nominal_diameter_nm": 50,
+  "channel_width_um": 200.0,
+  "channel_height_um": 50.0,
+  "channels": [
+    "channel_A",
+    "channel_B",
+    "channel_C"
+  ],
+  "notes": "50nm gold nanoparticles in 30% glycerol solution at 37°C; higher viscosity expected to reduce diffusion",
+  "operator": "synthetic_generator",
+  "timestamp": "2026-06-21T11:38:36.635232"
+}
